@@ -1,0 +1,21 @@
+{
+  "Nitrogen": {
+    "low": 280,
+    "medium": 560,
+    "unit": "kg/ha"
+  },
+  "Phosphorus": {
+    "low": 10,
+    "medium": 25,
+    "unit": "kg/ha"
+  },
+  "Potassium": {
+    "low": 110,
+    "medium": 280,
+    "unit": "kg/ha"
+  },
+  "pH": {
+    "acidic": 6.0,
+    "alkaline": 7.5
+  }
+}

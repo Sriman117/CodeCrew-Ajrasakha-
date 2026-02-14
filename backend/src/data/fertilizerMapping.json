@@ -1,0 +1,22 @@
+{
+  "Nitrogen": {
+    "product": "Neem Coated Urea",
+    "nutrientContent": 0.46,
+    "bagWeight": 45
+  },
+  "Phosphorus": {
+    "product": "Single Super Phosphate",
+    "nutrientContent": 0.16,
+    "bagWeight": 50
+  },
+  "Potassium": {
+    "product": "Muriate of Potash",
+    "nutrientContent": 0.60,
+    "bagWeight": 50
+  },
+  "pH_low": {
+    "product": "Agricultural Lime",
+    "nutrientContent": 1,
+    "bagWeight": 50
+  }
+}
