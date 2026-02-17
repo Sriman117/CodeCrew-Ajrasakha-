@@ -1,63 +1,74 @@
 const express = require("express");
 const router = express.Router();
 
-const interpret = require("../logic/interpretSoil");
+const interpretSoil = require("../logic/interpretSoil");
 const calculateDeficiency = require("../logic/calculateDeficiency");
-const recommend = require("../logic/recommendFertilizer");
+const recommendFertilizer = require("../logic/recommendFertilizer");
+const SoilScan = require("../models/SoilScan");
 
-router.post("/analyze", (req, res) => {
+/**
+ * POST /api/analyze
+ * Body:
+ * {
+ *   soil: { N, P, K, OC?, pH },
+ *   crop: "wheat" | "rice" | "cotton",
+ *   farmSize: number
+ * }
+ */
+router.post("/analyze", async (req, res) => {
   try {
     const { soil, crop, farmSize } = req.body;
 
-    // Validate required fields
-    if (!soil || !crop) {
+    if (!soil || !crop || !farmSize) {
       return res.status(400).json({
-        error: "Soil data and crop are required."
+        error: "Missing required fields"
       });
     }
 
-    const { N, P, K, pH } = soil;
-
-    if (
-      N === undefined ||
-      P === undefined ||
-      K === undefined ||
-      pH === undefined
-    ) {
+    if (soil.pH < 3 || soil.pH > 9) {
       return res.status(400).json({
-        error: "Incomplete soil data."
+        error: "Soil pH must be between 3 and 9"
       });
     }
 
-    if (pH < 3 || pH > 9) {
-      return res.status(400).json({
-        error: "Soil pH must be between 3 and 9."
-      });
-    }
-
-    if (N < 0 || P < 0 || K < 0) {
-      return res.status(400).json({
-        error: "NPK values cannot be negative."
-      });
-    }
-
-    const interpretation = interpret(soil);
+    /* ---------- LOGIC ENGINE ---------- */
+    const interpretation = interpretSoil(soil);
     const deficiencies = calculateDeficiency(soil, crop);
-    const recommendationResult = recommend(
-      deficiencies,
-      farmSize || 1
-    );
+    const recommendations = recommendFertilizer(deficiencies, farmSize);
 
-    return res.status(200).json({
+    const totalCost = recommendations.reduce(
+  (sum, item) => sum + (item.cost || 0),
+  0
+);
+
+
+    /* ---------- SAVE TO MONGODB ---------- */
+    await SoilScan.create({
+      soil,
+      crop,
+      farmSize,
       interpretation,
       deficiencies,
-      recommendations: recommendationResult.recommendations,
-      totalCost: recommendationResult.totalCost
+      recommendations,
+      totalCost
     });
+
+    /* ---------- RESPONSE ---------- */
+    res.json({
+      interpretation,
+      deficiencies: deficiencies.map(d => ({
+        nutrient: d.nutrient,
+        status: d.status,
+        deficiency_percentage: d.deficiency_percentage
+      })),
+      recommendations,
+      totalCost
+    });
+
   } catch (error) {
-    console.error("Analyze error:", error);
-    return res.status(500).json({
-      error: "Internal server error"
+    console.error("Analysis error:", error);
+    res.status(500).json({
+      error: "Analysis failed"
     });
   }
 });

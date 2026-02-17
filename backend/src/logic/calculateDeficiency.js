@@ -1,34 +1,81 @@
 const cropStandards = require("../data/cropStandards.json");
+const soilRanges = require("../data/soilRanges.json");
 
 function calculateDeficiency(soil, crop) {
-  const target = cropStandards[crop];
   const deficiencies = [];
+  const standards = cropStandards[crop];
 
-  if (soil.N < target.targetN) {
+  if (!standards) return deficiencies;
+
+  // Nitrogen
+  if (soil.N !== undefined && soil.N < standards.targetN) {
+    const gap = standards.targetN - soil.N;
+    const percentage = Math.round((gap / standards.targetN) * 100);
+
     deficiencies.push({
       nutrient: "Nitrogen",
-      gap: target.targetN - soil.N
+      status: "Low",
+      gap,
+      deficiency_percentage: percentage
     });
   }
 
-  if (soil.P < target.targetP) {
+  // Phosphorus
+  if (soil.P !== undefined && soil.P < standards.targetP) {
+    const gap = standards.targetP - soil.P;
+    const percentage = Math.round((gap / standards.targetP) * 100);
+
     deficiencies.push({
       nutrient: "Phosphorus",
-      gap: target.targetP - soil.P
+      status: "Low",
+      gap,
+      deficiency_percentage: percentage
     });
   }
 
-  if (soil.K < target.targetK) {
+  // Potassium
+  if (soil.K !== undefined && soil.K < standards.targetK) {
+    const gap = standards.targetK - soil.K;
+    const percentage = Math.round((gap / standards.targetK) * 100);
+
     deficiencies.push({
       nutrient: "Potassium",
-      gap: target.targetK - soil.K
+      status: "Low",
+      gap,
+      deficiency_percentage: percentage
     });
   }
 
-  if (soil.pH < target.pH.min) {
+  // Organic Carbon
+  if (
+    soil.OC !== undefined &&
+    soil.OC < soilRanges.OC.low
+  ) {
+    const gap = soilRanges.OC.low - soil.OC;
+    const percentage = Math.round(
+      (gap / soilRanges.OC.low) * 100
+    );
+
+    deficiencies.push({
+      nutrient: "OC",
+      status: "Low",
+      gap,
+      deficiency_percentage: percentage
+    });
+  }
+
+  // pH
+  if (soil.pH < standards.pH.min) {
     deficiencies.push({
       nutrient: "pH",
+      status: "Acidic",
       issue: "Low"
+    });
+  } else if (soil.pH > standards.pH.max) {
+    deficiencies.push({
+      nutrient: "pH",
+      status: "Alkaline",
+      issue: "High"
     });
   }
 

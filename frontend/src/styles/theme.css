@@ -1,0 +1,9 @@
+button {
+  background: linear-gradient(135deg, #c97d2e, #e8b84b);
+  border: none;
+  padding: 12px 30px;
+  border-radius: 100px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+}

@@ -2,21 +2,50 @@
   "Nitrogen": {
     "product": "Neem Coated Urea",
     "nutrientContent": 0.46,
-    "bagWeight": 45
+    "bagWeight": 45,
+    "buyLinks": {
+      "google": "https://www.google.com/search?q=Neem+Coated+Urea+fertilizer+near+me",
+      "amazon": "https://www.amazon.in/s?k=Neem+Coated+Urea"
+    }
   },
+
   "Phosphorus": {
     "product": "Single Super Phosphate",
     "nutrientContent": 0.16,
-    "bagWeight": 50
+    "bagWeight": 50,
+    "buyLinks": {
+      "google": "https://www.google.com/search?q=Single+Super+Phosphate+fertilizer+near+me",
+      "amazon": "https://www.amazon.in/s?k=Single+Super+Phosphate"
+    }
   },
+
   "Potassium": {
     "product": "Muriate of Potash",
     "nutrientContent": 0.60,
-    "bagWeight": 50
+    "bagWeight": 50,
+    "buyLinks": {
+      "google": "https://www.google.com/search?q=Muriate+of+Potash+fertilizer+near+me",
+      "amazon": "https://www.amazon.in/s?k=Muriate+of+Potash"
+    }
   },
+
+  "OC": {
+    "product": "Vermicompost",
+    "nutrientContent": 0.20,
+    "bagWeight": 50,
+    "buyLinks": {
+      "google": "https://www.google.com/search?q=Vermicompost+near+me",
+      "amazon": "https://www.amazon.in/s?k=Vermicompost"
+    }
+  },
+
   "pH_low": {
     "product": "Agricultural Lime",
     "nutrientContent": 1,
-    "bagWeight": 50
+    "bagWeight": 50,
+    "buyLinks": {
+      "google": "https://www.google.com/search?q=Agricultural+Lime+near+me",
+      "amazon": "https://www.amazon.in/s?k=Agricultural+Lime"
+    }
   }
 }

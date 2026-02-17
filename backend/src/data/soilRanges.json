@@ -14,6 +14,11 @@
     "medium": 280,
     "unit": "kg/ha"
   },
+  "OC": {
+    "low": 0.5,
+    "medium": 0.75,
+    "unit": "%"
+  },
   "pH": {
     "acidic": 6.0,
     "alkaline": 7.5

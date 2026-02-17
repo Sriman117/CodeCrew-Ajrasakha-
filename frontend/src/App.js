@@ -1,22 +1,15 @@
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import MittiScan from "./pages/MittiScan";
 import VerifyEdit from "./pages/VerifyEdit";
 
 function App() {
   return (
-    <div
-      style={{
-        padding: "20px",
-        fontFamily: "Arial, sans-serif",
-        maxWidth: "600px",
-        margin: "0 auto"
-      }}
-    >
-      <h1>🌱 Mitti-Scan</h1>
-      <p>
-        Soil Health Card Digitizer & Fertilizer Recommendation System
-      </p>
-
-      <VerifyEdit />
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<MittiScan />} />
+        <Route path="/scan" element={<VerifyEdit />} />
+      </Routes>
+    </Router>
   );
 }
 
