@@ -1,5 +1,5 @@
 import React from "react";
-import { FieldCanvas, GlowOrbs, GrassLayer } from "../components/MittiScan/Background";
+import { FieldCanvas, GlowOrbs, GrassLayer } from "../components/Background";
 
 export function LandingPage({ onEnterApp }) {
     return (
