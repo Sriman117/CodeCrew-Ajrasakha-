@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { scanCard, analyzeSoil } from "../services/api";
-import { C } from "../components/MittiScan/constants";
-import { UploadTab } from "../components/MittiScan/UploadTab";
-import { DashboardTab } from "../components/MittiScan/DashboardTab";
-import { HistoryTab } from "../components/MittiScan/HistoryTab";
-import { CartTab } from "../components/MittiScan/CartTab";
-import { LoadingOverlay } from "../components/MittiScan/Shared";
+import { C } from "../components/constants";
+import { UploadTab } from "../components/UploadTab";
+import { DashboardTab } from "../components/DashboardTab";
+import { HistoryTab } from "../components/HistoryTab";
+import { CartTab } from "../components/CartTab";
+import { LoadingOverlay } from "../components/Shared";
 import { LandingPage } from "./LandingPage";
 
 /* ── Tab Configuration ── */

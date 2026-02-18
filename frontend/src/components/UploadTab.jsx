@@ -28,7 +28,7 @@ export function UploadTab({ soil, setSoil, crop, setCrop, farmSize, setFarmSize,
                             <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.leafDeep, marginBottom: 4, textTransform: "uppercase" }}>{key}</label>
                             <input
                                 type="number"
-                                value={soil[key]}
+                                value={soil[key] || ""}
                                 onChange={(e) => setSoil({ ...soil, [key]: Number(e.target.value) || "" })}
                                 style={{
                                     width: "100%", padding: "12px", borderRadius: 8, border: "1px solid rgba(45,216,112,0.3)",
