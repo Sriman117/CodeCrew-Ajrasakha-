@@ -1,7 +1,8 @@
-const ranges = require("../data/soilRanges.json");
+const { SOIL_RANGES } = require("../config/constants");
 
 function interpretSoil(soil) {
   const result = {};
+  const ranges = SOIL_RANGES;
 
   // Nitrogen
   if (soil.N < ranges.Nitrogen.low) result.N = "Low";

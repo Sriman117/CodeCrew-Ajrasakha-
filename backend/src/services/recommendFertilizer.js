@@ -1,5 +1,4 @@
-const mapping = require("../data/fertilizerMapping.json");
-const prices = require("../data/fertilizerPrices.json");
+const { FERTILIZER_MAPPING, FERTILIZER_PRICES } = require("../config/constants");
 
 function recommendFertilizer(deficiencies, farmSize = 1) {
   const recommendations = [];
@@ -17,9 +16,9 @@ function recommendFertilizer(deficiencies, farmSize = 1) {
 
     const bags = d.gap
       ? Math.ceil(
-          (d.gap * farmSize) /
-          (map.nutrientContent * map.bagWeight)
-        )
+        (d.gap * farmSize) /
+        (map.nutrientContent * map.bagWeight)
+      )
       : 1;
 
     if (isNaN(bags) || bags <= 0) return;

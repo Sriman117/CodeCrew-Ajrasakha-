@@ -1,9 +1,9 @@
-const cropStandards = require("../data/cropStandards.json");
-const soilRanges = require("../data/soilRanges.json");
+const { CROP_STANDARDS, SOIL_RANGES } = require("../config/constants");
 
 function calculateDeficiency(soil, crop) {
   const deficiencies = [];
-  const standards = cropStandards[crop];
+  const standards = CROP_STANDARDS[crop];
+  const soilRanges = SOIL_RANGES;
 
   if (!standards) return deficiencies;
 
