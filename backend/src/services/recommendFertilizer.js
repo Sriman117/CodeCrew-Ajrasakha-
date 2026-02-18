@@ -7,23 +7,33 @@ function recommendFertilizer(deficiencies, farmSize = 1) {
     let map;
 
     if (d.nutrient === "pH") {
-      map = mapping["pH_low"];
+      // Handle pH specifically if needed, or skip
+      // For now, let's assume we want to treat low pH
+      if (d.status === "Acidic") {
+        map = FERTILIZER_MAPPING["pH_low"];
+      } else {
+        return;
+      }
     } else {
-      map = mapping[d.nutrient];
+      map = FERTILIZER_MAPPING[d.nutrient];
     }
 
     if (!map) return;
 
-    const bags = d.gap
-      ? Math.ceil(
+    // Calculate bags
+    let bags = 1;
+    if (d.gap) {
+      bags = Math.ceil(
         (d.gap * farmSize) /
         (map.nutrientContent * map.bagWeight)
-      )
-      : 1;
+      );
+    }
 
-    if (isNaN(bags) || bags <= 0) return;
+    if (isNaN(bags) || bags <= 0) bags = 1;
 
-    const pricePerBag = prices[map.product];
+    const pricePerBag = FERTILIZER_PRICES[map.product];
+    // console.log("Product:", map.product, "Price:", pricePerBag); // Debug
+
     if (!pricePerBag || isNaN(pricePerBag)) return;
 
     const cost = bags * pricePerBag;
