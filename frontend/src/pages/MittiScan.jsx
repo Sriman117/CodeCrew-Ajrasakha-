@@ -1,223 +1,258 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { scanCard, analyzeSoil } from "../services/api";
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell
+} from "recharts";
 
-/* ─────────────────────────────────────────
-   STATIC DATA (created once, never changes)
-───────────────────────────────────────── */
-const STRATA = [
-  { y: 0.65, amp: 18, freq: 0.003, speed: 0.4, color: "rgba(61,31,0,0.35)" },
-  { y: 0.72, amp: 12, freq: 0.004, speed: 0.6, color: "rgba(40,15,0,0.45)" },
-  { y: 0.80, amp: 8,  freq: 0.005, speed: 0.8, color: "rgba(20,8,0,0.6)"   },
-  { y: 0.88, amp: 5,  freq: 0.006, speed: 1.0, color: "rgba(10,4,0,0.8)"   },
-];
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  return isMobile;
+};
 
-const STARS = Array.from({ length: 120 }, () => ({
-  x:  Math.random(),
-  y:  Math.random() * 0.6,
-  r:  0.5 + Math.random() * 1.5,
-  sp: 0.001 + Math.random() * 0.003,
+/* ── Palette ── */
+const C = {
+  leafDeep: "#0a2e12",
+  forestMid: "#0f4a1e",
+  grassBright: "#1a7a30",
+  mintFresh: "#2dd870",
+  neonGreen: "#5fff8a",
+  limeGlow: "#b8ff5a",
+  creamWhite: "#f0ffe8",
+  dewBlue: "#c8fff0",
+  goldSun: "#f5d060",
+  soilRich: "#5c3a1e",
+  whiteOverlay: "rgba(255,255,255,0.85)",
+};
+
+/* ── Static data ── */
+const STARS = Array.from({ length: 160 }, () => ({
+  x: Math.random(), y: Math.random(),
+  r: 0.4 + Math.random() * 1.8,
+  sp: 0.0008 + Math.random() * 0.003,
   ph: Math.random() * Math.PI * 2,
+  col: Math.random() > 0.6 ? "#5fff8a" : Math.random() > 0.5 ? "#b8ff5a" : "#c8fff0",
 }));
 
-const WHEAT_STALKS = Array.from({ length: 60 }, (_, i) => {
-  const colors = ["#6b8c3f","#4a7c2f","#8aae4f","#5a9040"];
-  const x     = (i / 59) * 1440 + (Math.random() - 0.5) * 20;
-  const h     = 60 + Math.random() * 80;
-  const qx    = x + (Math.random() - 0.5) * 15;
-  const rx    = 2.5 + Math.random() * 2;
-  const ry    = 6   + Math.random() * 5;
+const LEAVES = Array.from({ length: 22 }, (_, i) => ({
+  x: Math.random() * 100, y: Math.random() * 100,
+  size: 18 + Math.random() * 40, rot: Math.random() * 360,
+  dur: 6 + Math.random() * 12, delay: Math.random() * -12,
+  drift: (Math.random() - 0.5) * 160, opacity: 0.06 + Math.random() * 0.12,
+  type: Math.floor(Math.random() * 3),
+}));
+
+const ORBS = Array.from({ length: 6 }, (_, i) => ({
+  x: 10 + Math.random() * 80, y: 10 + Math.random() * 80,
+  size: 80 + Math.random() * 180, dur: 8 + Math.random() * 12, delay: Math.random() * -10,
+  col: [C.mintFresh, C.neonGreen, C.limeGlow, C.dewBlue, "#a8ffcc", "#d4ffb0"][i],
+}));
+
+const GRASS = Array.from({ length: 80 }, (_, i) => {
+  const x = (i / 79) * 1440 + (Math.random() - 0.5) * 15;
+  const h = 40 + Math.random() * 90;
   return {
-    x, h, qx,
-    color:   colors[Math.floor(Math.random() * 4)],
-    sw:      0.5 + Math.random() * 1.5,
-    opacity: 0.4 + Math.random() * 0.5,
-    delay:   Math.random() * 3,
-    dur:     2 + Math.random() * 2,
-    grainRx: rx, grainRy: ry,
+    x, h, qx: x + (Math.random() - 0.5) * 18,
+    col: ["#2dd870", "#5fff8a", "#1a7a30", "#b8ff5a"][Math.floor(Math.random() * 4)],
+    sw: 0.8 + Math.random() * 1.8, op: 0.35 + Math.random() * 0.5,
+    dur: 1.5 + Math.random() * 2.5, delay: Math.random() * 3,
+    grainCol: Math.random() > 0.5 ? "#f5d060" : "#b8ff5a",
+    grainRx: 1.5 + Math.random() * 2.5, grainRy: 5 + Math.random() * 8,
     grainOp: 0.5 + Math.random() * 0.4,
   };
 });
 
-const MOLECULES = [
-  { left: "15%", top: "35%", size: 40, dur: "7s",  delay: "0s"  },
-  { left: "80%", top: "20%", size: 30, dur: "9s",  delay: "-3s" },
-  { left: "88%", top: "70%", size: 35, dur: "11s", delay: "-6s" },
-  { left: "8%",  top: "75%", size: 28, dur: "8s",  delay: "-2s" },
-];
-
-const CARDS = [
-  {
-    label: "Nitrogen (N)", value: "82", unit: "%", status: "Adequate Level",
-    color: "#e8b84b", barW: "82%", barGrad: "linear-gradient(90deg,#4a8c3f,#76c442)",
-    pos: { top: "12%", left: "4%" }, delay: "0s", width: 180,
-  },
-  {
-    label: "Soil pH", value: "6.8", unit: "", status: "Optimal Range",
-    color: "#76c442", barW: "68%", barGrad: "linear-gradient(90deg,#76c442,#00f5c4)",
-    pos: { top: "55%", left: "6%" }, delay: "-3s", width: 160,
-  },
-  {
-    label: "Phosphorus (P)", value: "47", unit: "kg/ha", status: "Medium",
-    color: "#e8b84b", barW: "47%", barGrad: "linear-gradient(90deg,#e8b84b,#c97d2e)",
-    pos: { top: "18%", right: "4%" }, delay: "-5s", width: 180,
-  },
-  {
-    label: "Organic Carbon", value: "0.72", unit: "", status: "% / Low",
-    color: "#00f5c4", barW: "30%", barGrad: "linear-gradient(90deg,#00f5c4,#0099aa)",
-    pos: { top: "62%", right: "5%" }, delay: "-7s", width: 160,
-  },
-];
-
-/* ─────────────────────────────────────────
-   SUB-COMPONENTS
-───────────────────────────────────────── */
-
-/** Animated Canvas — terrain, orbs, light rays, stars */
-function TerrainCanvas() {
+/* ── Canvas ── */
+function FieldCanvas() {
   const canvasRef = useRef(null);
-  const tRef      = useRef(0);
-  const rafRef    = useRef(null);
+  const tRef = useRef(0);
+  const rafRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx    = canvas.getContext("2d");
-
-    const resize = () => {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
     resize();
     window.addEventListener("resize", resize);
 
     const draw = () => {
       const t = tRef.current;
-      const w = canvas.width;
-      const h = canvas.height;
-
+      const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
 
-      // Background radial gradient
-      const bgGrad = ctx.createRadialGradient(w*0.5,h*0.4,0, w*0.5,h*0.5,w*0.8);
-      bgGrad.addColorStop(0,   "#1a0800");
-      bgGrad.addColorStop(0.5, "#0d0400");
-      bgGrad.addColorStop(1,   "#050100");
-      ctx.fillStyle = bgGrad;
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, "#dfffee");
+      sky.addColorStop(0.3, "#c2ffda");
+      sky.addColorStop(0.6, "#e8fff4");
+      sky.addColorStop(1, "#f5fff0");
+      ctx.fillStyle = sky;
       ctx.fillRect(0, 0, w, h);
 
-      // Soil strata
-      STRATA.forEach(s => {
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2 + t * 0.015;
+        const grad = ctx.createLinearGradient(w / 2, -50, w / 2 + Math.cos(angle) * w, Math.sin(angle) * h);
+        grad.addColorStop(0, `rgba(255,255,220,${0.06 + 0.04 * Math.sin(t * 0.3 + i)})`);
+        grad.addColorStop(1, "transparent");
         ctx.beginPath();
-        ctx.moveTo(0, h);
-        for (let x = 0; x <= w; x += 4) {
-          const y = h * s.y
-            + Math.sin(x * s.freq + t * s.speed) * s.amp
-            + Math.sin(x * s.freq * 1.7 + t * s.speed * 1.3) * s.amp * 0.4;
-          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        }
-        ctx.lineTo(w, h);
-        ctx.lineTo(0, h);
-        ctx.closePath();
-        ctx.fillStyle = s.color;
-        ctx.fill();
-      });
-
-      // Amber orb glow
-      const orb = ctx.createRadialGradient(w*0.5,h*0.42,0, w*0.5,h*0.42,w*0.35);
-      orb.addColorStop(0,   "rgba(201,125,46,0.08)");
-      orb.addColorStop(0.5, "rgba(232,184,75,0.04)");
-      orb.addColorStop(1,   "transparent");
-      ctx.fillStyle = orb;
-      ctx.fillRect(0, 0, w, h);
-
-      // Cyan top glow
-      const cyanOrb = ctx.createRadialGradient(w*0.5,0,0, w*0.5,0,w*0.5);
-      cyanOrb.addColorStop(0, "rgba(0,245,196,0.06)");
-      cyanOrb.addColorStop(1, "transparent");
-      ctx.fillStyle = cyanOrb;
-      ctx.fillRect(0, 0, w, h);
-
-      // Rotating light rays
-      for (let i = 0; i < 5; i++) {
-        const angle = (i / 5) * Math.PI * 2 + t * 0.05;
-        const x1 = w * 0.5, y1 = h * 0.4;
-        const x2 = x1 + Math.cos(angle) * w * 0.6;
-        const y2 = y1 + Math.sin(angle) * h * 0.5;
-        const ray = ctx.createLinearGradient(x1, y1, x2, y2);
-        ray.addColorStop(0, "rgba(201,125,46,0.04)");
-        ray.addColorStop(1, "transparent");
         const perp = angle + Math.PI / 2;
-        ctx.beginPath();
-        ctx.moveTo(x1 + Math.cos(perp)*30, y1 + Math.sin(perp)*30);
-        ctx.lineTo(x2 + Math.cos(perp)*80, y2 + Math.sin(perp)*80);
-        ctx.lineTo(x2 - Math.cos(perp)*80, y2 - Math.sin(perp)*80);
-        ctx.lineTo(x1 - Math.cos(perp)*30, y1 - Math.sin(perp)*30);
-        ctx.fillStyle = ray;
+        ctx.moveTo(w / 2 + Math.cos(perp) * 20, -50 + Math.sin(perp) * 20);
+        ctx.lineTo(w / 2 + Math.cos(angle) * w * 1.2 + Math.cos(perp) * 60, Math.sin(angle) * h * 1.2 + Math.sin(perp) * 60);
+        ctx.lineTo(w / 2 + Math.cos(angle) * w * 1.2 - Math.cos(perp) * 60, Math.sin(angle) * h * 1.2 - Math.sin(perp) * 60);
+        ctx.lineTo(w / 2 - Math.cos(perp) * 20, -50 - Math.sin(perp) * 20);
+        ctx.fillStyle = grad;
         ctx.fill();
       }
 
-      // Star field
-      STARS.forEach(s => {
-        const alpha = 0.2 + 0.3 * Math.sin(t * s.sp * 50 + s.ph);
+      const hills = [
+        { y: 0.70, amp: 30, freq: 0.0015, sp: 0.25, col: "rgba(26,122,48,0.18)" },
+        { y: 0.75, amp: 20, freq: 0.002, sp: 0.35, col: "rgba(20,100,38,0.22)" },
+        { y: 0.80, amp: 14, freq: 0.003, sp: 0.5, col: "rgba(15,74,30,0.28)" },
+        { y: 0.86, amp: 8, freq: 0.004, sp: 0.7, col: "rgba(10,55,20,0.38)" },
+        { y: 0.92, amp: 5, freq: 0.005, sp: 0.9, col: "rgba(92,58,30,0.55)" },
+      ];
+      hills.forEach(s => {
         ctx.beginPath();
-        ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-        ctx.fill();
+        for (let x = 0; x <= w; x += 3) {
+          const y = h * s.y + Math.sin(x * s.freq + t * s.sp) * s.amp + Math.sin(x * s.freq * 2.1 + t * s.sp * 1.4) * s.amp * 0.35;
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+        ctx.fillStyle = s.col; ctx.fill();
       });
 
-      tRef.current += 0.008;
+      const sunX = w * 0.82, sunY = h * 0.12;
+      const sun = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 160);
+      sun.addColorStop(0, "rgba(255,240,140,0.55)");
+      sun.addColorStop(0.3, "rgba(245,210,60,0.25)");
+      sun.addColorStop(0.7, "rgba(180,255,130,0.1)");
+      sun.addColorStop(1, "transparent");
+      ctx.fillStyle = sun; ctx.fillRect(0, 0, w, h);
+
+      const glow = ctx.createRadialGradient(w * 0.5, h * 0.45, 0, w * 0.5, h * 0.45, w * 0.4);
+      glow.addColorStop(0, "rgba(95,255,138,0.07)");
+      glow.addColorStop(0.5, "rgba(45,216,112,0.04)");
+      glow.addColorStop(1, "transparent");
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+
+      STARS.forEach(s => {
+        const alpha = 0.15 + 0.4 * Math.abs(Math.sin(t * s.sp * 40 + s.ph));
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(s.x * w, s.y * h * 0.75, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = s.col;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+
+      ctx.strokeStyle = "rgba(45,216,112,0.04)";
+      ctx.lineWidth = 1;
+      for (let y = 0; y < h; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + Math.sin(t * 0.5 + y * 0.01) * 2);
+        ctx.lineTo(w, y + Math.sin(t * 0.5 + y * 0.01) * 2);
+        ctx.stroke();
+      }
+
+      tRef.current += 0.007;
       rafRef.current = requestAnimationFrame(draw);
     };
 
     draw();
-    return () => {
-      window.removeEventListener("resize", resize);
-      cancelAnimationFrame(rafRef.current);
-    };
+    return () => { window.removeEventListener("resize", resize); cancelAnimationFrame(rafRef.current); };
   }, []);
 
+  return <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, width: "100%", height: "100%", zIndex: 0 }} />;
+}
+
+/* ── Decorative layers ── */
+function LeafShape({ type, size, color = C.mintFresh }) {
+  if (type === 0) return <ellipse cx={size / 2} cy={size / 2} rx={size * 0.25} ry={size * 0.45} fill={color} opacity="0.9" transform={`rotate(-20 ${size / 2} ${size / 2})`} />;
+  if (type === 1) return <path d={`M${size / 2},${size * 0.1} C${size * 0.8},${size * 0.2} ${size * 0.9},${size * 0.6} ${size / 2},${size * 0.9} C${size * 0.1},${size * 0.6} ${size * 0.2},${size * 0.2} ${size / 2},${size * 0.1}Z`} fill={color} opacity="0.9" />;
+  return <path d={`M${size / 2},${size * 0.08} L${size * 0.75},${size * 0.35} L${size * 0.65},${size * 0.92} L${size * 0.35},${size * 0.92} L${size * 0.25},${size * 0.35}Z`} fill={color} opacity="0.9" />;
+}
+
+function LeafParticles() {
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ position: "fixed", inset: 0, width: "100%", height: "100%", zIndex: 0 }}
-    />
+    <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none", overflow: "hidden" }}>
+      {LEAVES.map((l, i) => (
+        <div key={i} style={{
+          position: "absolute", left: `${l.x}%`, top: `${l.y}%`,
+          width: l.size, height: l.size, opacity: l.opacity,
+          animationName: "leafFloat", animationDuration: `${l.dur}s`, animationDelay: `${l.delay}s`,
+          animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
+          "--drift": `${l.drift}px`, transform: `rotate(${l.rot}deg)`,
+        }}>
+          <svg viewBox={`0 0 ${l.size} ${l.size}`} width={l.size} height={l.size}>
+            <LeafShape type={l.type} size={l.size} color={i % 3 === 0 ? C.mintFresh : i % 3 === 1 ? C.limeGlow : C.neonGreen} />
+          </svg>
+        </div>
+      ))}
+    </div>
   );
 }
 
-/** Wheat SVG layer at bottom */
-function WheatLayer() {
+function GlowOrbs() {
   return (
-    <div style={{
-      position: "fixed", bottom: 0, left: 0, right: 0,
-      zIndex: 3, pointerEvents: "none", height: 200,
-    }}>
-      <svg viewBox="0 0 1440 200" preserveAspectRatio="none"
-           style={{ width: "100%", height: "100%" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none" }}>
+      {ORBS.map((o, i) => (
+        <div key={i} style={{
+          position: "absolute", left: `${o.x}%`, top: `${o.y}%`, width: o.size, height: o.size,
+          borderRadius: "50%", transform: "translate(-50%,-50%)",
+          background: `radial-gradient(circle, ${o.col}22 0%, ${o.col}08 40%, transparent 70%)`,
+          animationName: "orbPulse", animationDuration: `${o.dur}s`, animationDelay: `${o.delay}s`,
+          animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
+          filter: `blur(${20 + i * 4}px)`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function GrassLayer() {
+  return (
+    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 220, zIndex: 1, pointerEvents: "none" }}>
+      <svg viewBox="0 0 1440 220" preserveAspectRatio="none" style={{ width: "100%", height: "100%" }}>
         <defs>
-          <linearGradient id="soilGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#3d1f00" stopOpacity="0" />
-            <stop offset="60%"  stopColor="#1a0d00" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#0d0500" stopOpacity="1" />
+          <linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1a7a30" stopOpacity="0" />
+            <stop offset="50%" stopColor="#0a2e12" stopOpacity="0.7" />
+            <stop offset="100%" stopColor="#050f06" stopOpacity="1" />
           </linearGradient>
         </defs>
-        <ellipse cx="720" cy="200" rx="900" ry="80" fill="#1a0d00" opacity="0.8" />
-        <rect x="0" y="160" width="1440" height="40" fill="url(#soilGrad)" />
-        {WHEAT_STALKS.map((s, i) => (
+        <ellipse cx="720" cy="220" rx="950" ry="90" fill="#0f4a1e" opacity="0.7" />
+        <rect x="0" y="175" width="1440" height="45" fill="url(#groundGrad)" />
+        {GRASS.map((g, i) => (
           <g key={i}>
-            <path
-              d={`M${s.x},180 Q${s.qx},${180 - s.h / 2} ${s.x},${180 - s.h}`}
-              stroke={s.color} strokeWidth={s.sw} fill="none" opacity={s.opacity}
+            <path d={`M${g.x},210 Q${g.qx},${210 - g.h / 2} ${g.x},${210 - g.h}`}
+              stroke={g.col} strokeWidth={g.sw} fill="none" opacity={g.op}
               style={{
-                transformOrigin: "bottom center",
-                animation: `wheatWave ${s.dur}s ease-in-out ${s.delay}s infinite alternate`,
+                transformOrigin: `${g.x}px 210px`, animationName: "grassSway", animationDuration: `${g.dur}s`,
+                animationDelay: `${g.delay}s`, animationTimingFunction: "ease-in-out",
+                animationIterationCount: "infinite", animationDirection: "alternate"
               }}
             />
-            <ellipse
-              cx={s.x} cy={180 - s.h}
-              rx={s.grainRx} ry={s.grainRy}
-              fill="#e8b84b" opacity={s.grainOp}
+            <ellipse cx={g.x} cy={210 - g.h} rx={g.grainRx} ry={g.grainRy} fill={g.grainCol} opacity={g.grainOp}
               style={{
-                transformOrigin: "bottom center",
-                animation: `wheatWave ${s.dur}s ease-in-out ${s.delay}s infinite alternate`,
+                transformOrigin: `${g.x}px ${210 - g.h}px`, animationName: "grassSway", animationDuration: `${g.dur}s`,
+                animationDelay: `${g.delay}s`, animationTimingFunction: "ease-in-out",
+                animationIterationCount: "infinite", animationDirection: "alternate"
               }}
             />
           </g>
@@ -227,501 +262,972 @@ function WheatLayer() {
   );
 }
 
-/** Floating molecule icons */
-function Molecules() {
-  return (
-    <>
-      {MOLECULES.map((m, i) => (
-        <div key={i} style={{
-          position: "fixed", left: m.left, top: m.top,
-          zIndex: 2, pointerEvents: "none",
-          animationName: "moleculeFloat",
-          animationDuration: m.dur,
-          animationDelay: m.delay,
-          animationTimingFunction: "ease-in-out",
-          animationIterationCount: "infinite",
-        }}>
-          <svg width={m.size} height={m.size} viewBox="0 0 40 40" fill="none" opacity="0.4">
-            <circle cx="20" cy="20" r="4"  fill="#c97d2e" />
-            <circle cx="8"  cy="12" r="3"  fill="#76c442" />
-            <circle cx="32" cy="12" r="3"  fill="#00f5c4" />
-            <circle cx="8"  cy="28" r="3"  fill="#e8b84b" />
-            <circle cx="32" cy="28" r="3"  fill="#76c442" />
-            <line x1="20" y1="20" x2="8"  y2="12" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-            <line x1="20" y1="20" x2="32" y2="12" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-            <line x1="20" y1="20" x2="8"  y2="28" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-            <line x1="20" y1="20" x2="32" y2="28" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-          </svg>
-        </div>
-      ))}
-    </>
-  );
-}
+/* ── Hardcoded Standards (Mirroring Backend) ── */
+// In a real app, fetch this from API or shared config
+const CROP_STANDARDS = {
+  wheat: { targetN: 300, targetP: 40, targetK: 300 },
+  rice: { targetN: 250, targetP: 30, targetK: 250 },
+  cotton: { targetN: 275, targetP: 35, targetK: 275 },
+};
 
-/** Soil particle system */
-function ParticleLayer() {
-  const [particles, setParticles] = useState([]);
-  const counterRef = useRef(0);
+/* ─────────────────────────────────────────
+   TAB SYSTEM + CONTENT
+───────────────────────────────────────── */
 
-  const spawnParticle = useCallback(() => {
-    const id      = counterRef.current++;
-    const size    = 2 + Math.random() * 8;
-    const colors  = ["#6b3a1f","#c97d2e","#e8b84b","#76c442","#00f5c4"];
-    const col     = colors[Math.floor(Math.random() * 5)];
-    const x       = Math.random() * 100;
-    const drift   = (Math.random() - 0.5) * 200;
-    const dur     = 6 + Math.random() * 14;
-    const p = { id, size, col, x, drift, dur, delay: Math.random() * -dur };
+const TABS = [
+  { id: "upload", label: "Upload", icon: "📤" },
+  { id: "dashboard", label: "Dashboard", icon: "📊" },
+  { id: "history", label: "History", icon: "📅" },
+  { id: "cart", label: "Cart", icon: "🛒" },
+];
 
-    setParticles(prev => [...prev, p]);
-    setTimeout(() => {
-      setParticles(prev => prev.filter(q => q.id !== id));
-    }, (dur + 2) * 1000);
-  }, []);
+/* ── UI Components ── */
+const Skeleton = ({ width, height, style }) => (
+  <div style={{
+    width, height, background: "rgba(0,0,0,0.06)", borderRadius: 8,
+    animation: "pulse 1.5s infinite ease-in-out", ...style
+  }} />
+);
 
-  useEffect(() => {
-    // Initial burst
-    for (let i = 0; i < 80; i++) spawnParticle();
-    const iv = setInterval(spawnParticle, 300);
-    return () => clearInterval(iv);
-  }, [spawnParticle]);
-
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none", overflow: "hidden" }}>
-      {particles.map(p => (
-        <div key={p.id} style={{
-          position: "absolute",
-          width: p.size, height: p.size,
-          left: `${p.x}%`,
-          borderRadius: "50%",
-          background: `radial-gradient(circle at 35% 35%, ${p.col}, rgba(0,0,0,0.5))`,
-          boxShadow: `0 0 ${p.size * 2}px ${p.col}44`,
-          "--drift": `${p.drift}px`,
-          animationName: "floatSoil",
-          animationDuration: `${p.dur}s`,
-          animationDelay: `${p.delay}s`,
-          animationTimingFunction: "linear",
-          animationIterationCount: "infinite",
-          opacity: 0,
-        }} />
-      ))}
-    </div>
-  );
-}
-
-/** 3D Floating data card */
-function SoilCard({ card, mousePos }) {
-  const dir = CARDS.indexOf(card) % 2 === 0 ? 1 : -1;
-  const cx  = mousePos.x * 20;
-  const cy  = mousePos.y * 10;
-  const t   = Date.now() * 0.001;
-  const idx = CARDS.indexOf(card);
-
-  return (
+const LoadingOverlay = ({ message }) => (
+  <div style={{
+    position: "fixed", inset: 0, zIndex: 100,
+    background: "rgba(255,255,255,0.85)", backdropFilter: "blur(5px)",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"
+  }}>
     <div style={{
-      position: "fixed",
-      ...card.pos,
-      width: card.width,
-      height: 110,
-      background: "rgba(20,8,0,0.7)",
-      border: "1px solid rgba(201,125,46,0.4)",
-      borderRadius: 12,
-      backdropFilter: "blur(10px)",
-      zIndex: 5,
-      padding: 14,
-      boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)",
-      animationName: "cardFloat",
-      animationDuration: "10s",
-      animationDelay: card.delay,
-      animationTimingFunction: "ease-in-out",
-      animationIterationCount: "infinite",
-      transformStyle: "preserve-3d",
-    }}>
-      {/* Shimmer overlay */}
+      width: 50, height: 50, border: `5px solid ${C.mintFresh}`,
+      borderTopColor: "transparent", borderRadius: "50%",
+      animation: "spin 1s linear infinite"
+    }} />
+    <div style={{ marginTop: 20, fontSize: 18, fontWeight: 700, color: C.leafDeep, letterSpacing: 1 }}>
+      {message || "Processing..."}
+    </div>
+    <div style={{ marginTop: 8, fontSize: 13, color: C.forestMid, opacity: 0.8 }}>
+      Please wait, our AI is working accurately
+    </div>
+    <style>{`
+      @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+      @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+    `}</style>
+  </div>
+);
+
+const ErrorBanner = ({ message, onClose }) => (
+  <div style={{
+    background: "#ffe5e5", border: "1px solid #ff6b6b", borderRadius: 12,
+    padding: "16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12,
+    color: "#c0392b", justifyContent: "space-between"
+  }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <span style={{ fontSize: 20 }}>⚠️</span>
+      <span style={{ fontWeight: 600 }}>{message}</span>
+    </div>
+    {onClose && (
+      <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#c0392b" }}>×</button>
+    )}
+  </div>
+);
+
+/* ── Upload / Verify Tab ── */
+function UploadTab({ soil, setSoil, crop, setCrop, farmSize, setFarmSize, onScan, onAnalyze, loading, error, isVerified, setIsVerified, file, setFile, setError }) {
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = e => { e.preventDefault(); e.stopPropagation(); };
+  const handleDragIn = e => { e.preventDefault(); e.stopPropagation(); setDragActive(true); };
+  const handleDragOut = e => { e.preventDefault(); e.stopPropagation(); setDragActive(false); };
+  const handleDrop = e => {
+    e.preventDefault(); e.stopPropagation(); setDragActive(false);
+    if (e.dataTransfer.files?.[0]) setFile(e.dataTransfer.files[0]);
+  };
+  const handleChange = e => { if (e.target.files?.[0]) setFile(e.target.files[0]); };
+
+  if (isVerified) {
+    return (
+      <div style={{ width: "100%", maxWidth: 600 }}>
+        <div style={{
+          fontSize: 28, fontWeight: 800, color: C.leafDeep,
+          fontFamily: "'Playfair Display',serif", marginBottom: 20, textAlign: "center"
+        }}>Verify & Edit Results</div>
+
+        <div style={{ background: C.whiteOverlay, padding: 24, borderRadius: 20, backdropFilter: "blur(12px)", border: `1px solid ${C.mintFresh}44` }}>
+          {Object.keys(soil).map(key => (
+            <div key={key} style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.leafDeep, marginBottom: 4, textTransform: "uppercase" }}>{key}</label>
+              <input
+                type="number"
+                value={soil[key]}
+                onChange={(e) => setSoil({ ...soil, [key]: Number(e.target.value) || "" })}
+                style={{
+                  width: "100%", padding: "12px", borderRadius: 8, border: "1px solid rgba(45,216,112,0.3)",
+                  background: "rgba(255,255,255,0.9)", fontSize: 16, color: C.leafDeep, outline: "none"
+                }}
+              />
+            </div>
+          ))}
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.leafDeep, marginBottom: 4, textTransform: "uppercase" }}>Crop</label>
+            <select
+              value={crop}
+              onChange={(e) => setCrop(e.target.value)}
+              style={{
+                width: "100%", padding: "12px", borderRadius: 8, border: "1px solid rgba(45,216,112,0.3)",
+                background: "rgba(255,255,255,0.9)", fontSize: 16, color: C.leafDeep, outline: "none"
+              }}
+            >
+              <option value="wheat">Wheat</option>
+              <option value="rice">Rice</option>
+              <option value="cotton">Cotton</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.leafDeep, marginBottom: 4, textTransform: "uppercase" }}>Farm Size (Acres)</label>
+            <input
+              type="number"
+              value={farmSize}
+              onChange={(e) => setFarmSize(Number(e.target.value))}
+              min="1"
+              style={{
+                width: "100%", padding: "12px", borderRadius: 8, border: "1px solid rgba(45,216,112,0.3)",
+                background: "rgba(255,255,255,0.9)", fontSize: 16, color: C.leafDeep, outline: "none"
+              }}
+            />
+          </div>
+
+          <button
+            onClick={onAnalyze}
+            style={{
+              width: "100%", padding: "14px", borderRadius: 100,
+              background: "linear-gradient(135deg,#1a7a30,#2dd870)",
+              border: "none", color: "#fff", fontSize: 15, fontWeight: 700,
+              cursor: "pointer", letterSpacing: 2, textTransform: "uppercase",
+              boxShadow: "0 6px 28px rgba(45,216,112,0.4)",
+              transition: "transform 0.2s",
+            }}
+            onMouseEnter={e => e.target.style.transform = "translateY(-2px)"}
+            onMouseLeave={e => e.target.style.transform = "translateY(0)"}
+          >
+            Generated Analysis Report
+          </button>
+          {error && <p style={{ color: "red", marginTop: 12, textAlign: "center", fontWeight: 700 }}>{error}</p>}
+        </div>
+        <button onClick={() => setIsVerified(false)} style={{ marginTop: 16, background: "none", border: "none", color: C.leafDeep, cursor: "pointer", textDecoration: "underline" }}>Cancel & Re-upload</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
       <div style={{
-        position: "absolute", inset: 0, borderRadius: 12,
-        background: "linear-gradient(135deg, rgba(201,125,46,0.1), transparent)",
-        pointerEvents: "none",
-      }} />
-      <div style={{
-        fontSize: 9, letterSpacing: 2, color: "#00f5c4",
-        textTransform: "uppercase", marginBottom: 6, fontWeight: 600,
-        fontFamily: "'Rajdhani', sans-serif",
-      }}>{card.label}</div>
-      <div style={{
-        fontSize: 22, fontWeight: 700, color: card.color,
-        lineHeight: 1, fontFamily: "'Rajdhani', sans-serif",
-      }}>
-        {card.value}
-        {card.unit && (
-          <span style={{ fontSize: 14, color: "rgba(255,255,255,0.4)" }}>{card.unit}</span>
+        fontSize: 28, fontWeight: 800, color: C.leafDeep,
+        fontFamily: "'Playfair Display',serif", marginBottom: 4,
+      }}>Upload Soil Health Card</div>
+      <p style={{ fontSize: 14, color: C.forestMid, maxWidth: 500, textAlign: "center", lineHeight: 1.6, opacity: 0.8 }}>
+        Upload a photo or scan of your Soil Health Card. Our AI-powered OCR will extract all the nutrients, pH levels, and recommendations.
+      </p>
+
+      <div
+        onDragEnter={handleDragIn} onDragLeave={handleDragOut}
+        onDragOver={handleDrag} onDrop={handleDrop}
+        style={{
+          width: "100%", maxWidth: 600, height: 320, borderRadius: 20,
+          border: dragActive ? "3px dashed #2dd870" : `2px dashed ${C.mintFresh}66`,
+          background: dragActive ? "rgba(45,216,112,0.08)" : C.whiteOverlay,
+          backdropFilter: "blur(12px)", display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 16,
+          cursor: "pointer", transition: "all 0.2s",
+          boxShadow: dragActive ? "0 8px 40px rgba(45,216,112,0.25)" : "0 4px 24px rgba(0,0,0,0.06)",
+        }}
+        onClick={() => document.getElementById("file-input").click()}
+      >
+        {!file ? (
+          <>
+            <div style={{
+              width: 80, height: 80, borderRadius: "50%",
+              background: "linear-gradient(135deg,#2dd870,#5fff8a)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 40, boxShadow: "0 8px 24px rgba(45,216,112,0.3)",
+            }}>📄</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.leafDeep }}>
+              Drop your card here or click to browse
+            </div>
+            <div style={{ fontSize: 13, color: C.forestMid, opacity: 0.7 }}>
+              Supports JPG, PNG, PDF up to 10MB
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{
+              width: 80, height: 80, borderRadius: "50%",
+              background: "linear-gradient(135deg,#2dd870,#5fff8a)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 40,
+            }}>✅</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.leafDeep }}>{file.name}</div>
+            <div style={{ fontSize: 13, color: "#0a4a1e66" }}>{(file.size / 1024).toFixed(0)} KB</div>
+            <button style={{
+              marginTop: 8, padding: "10px 28px", borderRadius: 100,
+              background: "linear-gradient(135deg,#1a7a30,#2dd870)",
+              border: "none", color: "#fff", fontSize: 13, fontWeight: 700,
+              cursor: "pointer", letterSpacing: 1.5, textTransform: "uppercase",
+              boxShadow: "0 4px 20px rgba(45,216,112,0.4)",
+              transition: "transform 0.2s",
+            }}
+              onMouseEnter={e => e.target.style.transform = "translateY(-2px)"}
+              onMouseLeave={e => e.target.style.transform = "translateY(0)"}
+              onClick={e => { e.stopPropagation(); onScan(file); }}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "Process Card"}
+            </button>
+          </>
         )}
       </div>
-      <div style={{
-        fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 2,
-        fontFamily: "'Rajdhani', sans-serif",
-      }}>{card.status}</div>
-      <div style={{
-        position: "absolute", bottom: 14, left: 14, right: 14,
-        height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden",
-      }}>
-        <div style={{
-          width: card.barW, height: "100%", borderRadius: 2,
-          background: card.barGrad,
-          animationName: "barFill",
-          animationDuration: "3s",
-          animationTimingFunction: "ease-in-out",
-          animationIterationCount: "infinite",
-          animationDirection: "alternate",
-        }} />
+
+      <input id="file-input" type="file" accept="image/*,.pdf" style={{ display: "none" }} onChange={handleChange} />
+      {error && <ErrorBanner message={error} onClose={() => setError("")} />}
+
+      <div style={{ marginTop: 12, display: "flex", gap: 32, flexWrap: "wrap", justifyContent: "center" }}>
+        {["Fast OCR", "98% Accuracy", "Instant Results"].map((t, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 6, height: 6, borderRadius: "50%", background: C.neonGreen,
+              boxShadow: "0 0 8px rgba(95,255,138,0.6)",
+            }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.leafDeep }}>{t}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-/** Holographic ring trio */
-function HoloRings({ mousePos }) {
-  const cx = mousePos.x * 20;
-  const cy = mousePos.y * 10;
+/* ── Dashboard Tab ── */
+function DashboardTab({ result, soil, metrics, activeTab, crop }) {
+  const [analytics, setAnalytics] = useState({ totalScans: 0, totalDeficiencies: 0, totalCost: 0 });
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    // Fetch community impact metrics
+    fetch('http://localhost:5000/api/analytics/metrics')
+      .then(res => res.json())
+      .then(data => setAnalytics(data))
+      .catch(err => console.error("Failed to fetch metrics", err));
+  }, []);
+
+  if (!result || !metrics || !soil) {
+    return (
+      <div style={{ textAlign: "center", padding: 60 }}>
+        <div style={{ fontSize: 60, marginBottom: 16 }}>🧬</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: C.leafDeep }}>No Analysis Data Yet</div>
+        <p style={{ color: "#0a4a1e88" }}>Please upload and process a soil health card first.</p>
+      </div>
+    )
+  }
+
+  // Helper Gauge Component
+  const RadialGauge = ({ label, value, min, max, ideal }) => {
+    // Normalize value to percentage (0-100)
+    const percent = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+
+    // Determine Color based on proximity to Ideal
+    let color = "#ff6b6b"; // Red (Bad)
+    if (value >= ideal * 0.9 && value <= ideal * 1.1) color = C.mintFresh; // Green (Good)
+    else if (value >= ideal * 0.75 && value <= ideal * 1.25) color = "#f5d060"; // Yellow (Okay)
+
+    const data = [
+      { name: 'Value', value: percent, fill: color },
+      { name: 'Rest', value: 100 - percent, fill: '#eee' },
+    ];
+
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        width: isMobile ? "45%" : "30%", minWidth: 100, // Responsive Width
+        marginBottom: isMobile ? 16 : 0
+      }}>
+        <div style={{ height: 100, width: "100%", position: "relative" }}>
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="100%"
+                startAngle={180}
+                endAngle={0}
+                innerRadius={50}
+                outerRadius={70}
+                dataKey="value"
+                stroke="none"
+              >
+                <Cell key="cell-0" fill={color} />
+                <Cell key="cell-1" fill="#706f6fff" />
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            textAlign: "center", fontSize: 20, fontWeight: 800, color: C.leafDeep
+          }}>
+            {value}
+          </div>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: C.leafDeep, textTransform: "uppercase" }}>{label}</div>
+        <div style={{ fontSize: 10, color: "#0a4a1e88" }}>Target: {ideal}</div>
+      </div>
+    );
+  };
+
+  const standards = CROP_STANDARDS[crop] || CROP_STANDARDS['wheat'];
+  const barData = [
+    { name: "Nitrogen", value: soil.N, ideal: standards.targetN },
+    { name: "Phosphorus", value: soil.P, ideal: standards.targetP },
+    { name: "Potassium", value: soil.K, ideal: standards.targetK },
+  ];
+
   return (
-    <div style={{
-      position: "fixed", top: "50%", left: "50%", zIndex: 2, pointerEvents: "none",
-      transform: `translate(calc(-50% + ${cx * 0.5}px), calc(-50% + ${cy * 0.3}px))`,
-      transition: "transform 0.1s ease-out",
-    }}>
-      {[
-        { size: 300, color: "rgba(201,125,46,0.15)", dur: "20s",  dir: "normal",  style: "solid"  },
-        { size: 450, color: "rgba(0,245,196,0.1)",   dur: "30s",  dir: "reverse", style: "dashed" },
-        { size: 600, color: "rgba(118,196,66,0.07)", dur: "45s",  dir: "normal",  style: "solid"  },
-      ].map((r, i) => (
-        <div key={i} style={{
-          position: "absolute",
-          width: r.size, height: r.size,
-          borderRadius: "50%",
-          border: `1px ${r.style} ${r.color}`,
-          top: "50%", left: "50%",
-          animationName: "ringRotate",
-          animationDuration: r.dur,
-          animationTimingFunction: "linear",
-          animationIterationCount: "infinite",
-          animationDirection: r.dir,
-        }} />
-      ))}
+    <div style={{ width: "100%", maxWidth: 1200 }}>
+
+      {/* 1. TOP BOX: Extracted Values + Impact Metrics */}
+      <div className="top-box" style={{
+        background: C.whiteOverlay, padding: 24, borderRadius: 20,
+        border: `1px solid ${C.mintFresh}44`, boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+        marginBottom: 24, display: "flex", flexWrap: "wrap", gap: 32, alignItems: "center", justifyContent: "space-between",
+        flexDirection: isMobile ? "column" : "row" // FORCE COLUMN ON MOBILE
+      }}>
+        {/* Extracted Values Group */}
+        <div style={{ flex: "1 1 300px", width: "100%" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.forestMid, textTransform: "uppercase", marginBottom: 16, letterSpacing: 1 }}>
+            Extracted Soil Values
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: isMobile ? "center" : "space-between" }}>
+            {[
+              { l: "Nitrogen", v: soil.N, u: "mg/kg" },
+              { l: "Phosphorus", v: soil.P, u: "mg/kg" },
+              { l: "Potassium", v: soil.K, u: "mg/kg" },
+              { l: "pH Level", v: soil.pH, u: "" },
+              { l: "Org. Carbon", v: soil.OC, u: "%" }
+            ].map((item, i) => (
+              <div key={i} style={{
+                background: "rgba(255,255,255,0.6)", padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.05)",
+                flex: "1 1 100px", display: "flex", flexDirection: "column", alignItems: "center"
+              }}>
+                <div style={{ fontSize: 10, color: "#0a4a1e88", fontWeight: 700, textTransform: "uppercase" }}>{item.l}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.leafDeep }}>{item.v}<span style={{ fontSize: 12, fontWeight: 500, marginLeft: 2 }}>{item.u}</span></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Separator for desktop */}
+        {!isMobile && <div style={{ width: 1, backgroundColor: C.mintFresh, opacity: 0.3, alignSelf: "stretch" }} className="desktop-divider" />}
+
+        {/* Impact Metrics Group */}
+        <div className="metric-group" style={{ flex: "1 1 250px", display: "flex", justifyContent: isMobile ? "space-around" : "flex-end", gap: 16, flexWrap: "wrap", width: "100%" }}>
+          {[
+            { label: "Community Scans", val: analytics.totalScans || "-", icon: "🌍" },
+            { label: "Deficiencies", val: analytics.totalDeficiencies || "-", icon: "🔍" },
+            { label: "Est. Savings", val: "₹" + (analytics.totalCost ? (analytics.totalCost * 0.15).toFixed(0) : "-"), icon: "💰" }
+          ].map((m, i) => (
+            <div key={i} style={{ textAlign: "center", minWidth: 80 }}>
+              <div style={{ fontSize: 24 }}>{m.icon}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.leafDeep }}>{m.val}</div>
+              <div style={{ fontSize: 10, textTransform: "uppercase", color: "#0a4a1e88", fontWeight: 700 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+
+      {/* 2. MIDDLE SECTION: Two Cols (Gauges + Bar Chart) */}
+      <div className="dashboard-grid" style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(400px, 1fr))", // FORCE 1 COLUMN
+        gap: 24, marginBottom: 24
+      }}>
+
+        {/* LEFT BOX: Radial Speedometers */}
+        <div style={{
+          background: C.whiteOverlay, padding: 24, borderRadius: 20,
+          border: `1px solid ${C.mintFresh}44`, display: "flex", flexDirection: "column"
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.leafDeep, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>🚀</span> Nutrient Health Gauges
+          </div>
+          <div className="gauge-flex" style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 20, flex: 1, alignItems: "center" }}>
+            <RadialGauge label="Nitrogen" value={soil.N || 0} min={0} max={600} ideal={standards.targetN} />
+            <RadialGauge label="Phosphorus" value={soil.P || 0} min={0} max={100} ideal={standards.targetP} />
+            <RadialGauge label="Potassium" value={soil.K || 0} min={0} max={600} ideal={standards.targetK} />
+          </div>
+        </div>
+
+        {/* RIGHT BOX: Comparative Bar Chart */}
+        <div style={{
+          background: C.whiteOverlay, padding: 24, borderRadius: 20,
+          border: `1px solid ${C.mintFresh}44`, height: 320
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.leafDeep, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>📊</span> Actual vs Ideal Levels
+          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={barData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#706f6fff" />
+              <XAxis dataKey="name" stroke={C.leafDeep} fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke={C.leafDeep} fontSize={12} tickLine={false} axisLine={false} />
+              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+              <Legend />
+              <Bar dataKey="value" name="Your Soil" fill={C.mintFresh} radius={[4, 4, 0, 0]} barSize={30} />
+              <Bar dataKey="ideal" name="Ideal Target" fill="#706f6fff" radius={[4, 4, 0, 0]} barSize={30} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+      </div>
+
+      {/* 3. BOTTOM: Recommendations (Existing) */}
+      <div style={{
+        background: C.whiteOverlay, backdropFilter: "blur(12px)",
+        borderRadius: 20, padding: 24, border: `1px solid ${C.mintFresh}44`,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.leafDeep, marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+          <span>💡</span> Analysis & Recommendations
+        </div>
+        <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 16 }}>
+          {result.deficiencies.map((d, i) => (
+            <li key={i} style={{
+              padding: "12px 16px", background: "rgba(255,107,107,0.08)",
+              borderRadius: 12, borderLeft: `4px solid #ff6b6b`,
+              fontSize: 14, color: C.leafDeep, lineHeight: 1.5,
+            }}>
+              <strong>{d.nutrient} is {d.status}</strong>: Deficiency of {d.deficiency_percentage}% detected.
+            </li>
+          ))}
+          {result.recommendations.map((r, i) => (
+            <li key={`rec-${i}`} style={{
+              padding: "16px", background: "rgba(95,255,138,0.08)",
+              borderRadius: 12, border: `1px solid ${C.mintFresh}44`,
+              fontSize: 14, color: C.leafDeep, lineHeight: 1.5,
+              display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12
+            }}>
+              <div>
+                Apply <strong>{r.bags} bags</strong> of <strong>{r.product}</strong>
+                <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Est. Cost: ₹{r.cost}</div>
+              </div>
+
+              {/* Retailer Links */}
+              {r.buyLinks && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  {r.buyLinks.amazon && (
+                    <a href={r.buyLinks.amazon} target="_blank" rel="noopener noreferrer" style={{
+                      textDecoration: "none", padding: "8px 16px", borderRadius: 100,
+                      background: "#FF9900", color: "#fff", fontSize: 12, fontWeight: 700,
+                      display: "flex", alignItems: "center", gap: 4
+                    }}>
+                      Amazon ↗
+                    </a>
+                  )}
+                  {r.buyLinks.google && (
+                    <a href={r.buyLinks.google} target="_blank" rel="noopener noreferrer" style={{
+                      textDecoration: "none", padding: "8px 16px", borderRadius: 100,
+                      background: "#4285F4", color: "#fff", fontSize: 12, fontWeight: 700,
+                      display: "flex", alignItems: "center", gap: 4
+                    }}>
+                      Search ↗
+                    </a>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
 
-/** Logo SVG icon */
-function LogoIcon() {
+/* ── History Tab ── */
+function HistoryTab() {
+  const [trends, setTrends] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/trends')
+      .then(res => res.json())
+      .then(data => {
+        // Format data for Recharts
+        const formatted = data.map(scan => ({
+          date: new Date(scan.scannedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          fullDate: new Date(scan.scannedAt).toLocaleDateString(),
+          N: scan.soil.N,
+          P: scan.soil.P,
+          K: scan.soil.K,
+          ph: scan.soil.pH
+        }));
+        setTrends(formatted);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch trends", err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ width: "100%", maxWidth: 1000 }}>
+        <div style={{ textAlign: "center", marginBottom: 30 }}>
+          <Skeleton width={300} height={40} style={{ margin: "0 auto 20px" }} />
+          <Skeleton width="100%" height={300} style={{ borderRadius: 20 }} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[1, 2, 3].map(i => <Skeleton key={i} width="100%" height={80} style={{ borderRadius: 16 }} />)}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <svg
-      viewBox="0 0 64 64" fill="none"
-      style={{
-        width: 64, height: 64,
-        animationName: "logoSpin",
-        animationDuration: "8s",
-        animationTimingFunction: "ease-in-out",
-        animationIterationCount: "infinite",
-      }}
-    >
-      <circle cx="32" cy="32" r="30" stroke="#c97d2e" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5"/>
-      <circle cx="32" cy="32" r="22" stroke="#00f5c4" strokeWidth="1"   opacity="0.3"/>
-      <rect x="12" y="36" width="40" height="6" rx="2" fill="#6b3a1f" opacity="0.8"/>
-      <rect x="12" y="42" width="40" height="6" rx="2" fill="#3d1f00" opacity="0.9"/>
-      <rect x="10" y="31" width="44" height="2" rx="1" fill="#00f5c4" opacity="0.9"/>
-      <line x1="10" y1="32" x2="54" y2="32" stroke="#00f5c4" strokeWidth="0.5" strokeDasharray="2 2" opacity="0.4"/>
-      <path d="M32 36 C32 28 40 22 44 18" stroke="#76c442" strokeWidth="2" strokeLinecap="round" fill="none"/>
-      <path d="M32 30 C32 24 24 20 20 16" stroke="#4a8c3f" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-      <ellipse cx="44" cy="17" rx="5" ry="3" fill="#76c442"  transform="rotate(-30 44 17)" opacity="0.9"/>
-      <ellipse cx="20" cy="15" rx="4" ry="2.5" fill="#4a8c3f" transform="rotate(30 20 15)"  opacity="0.8"/>
-    </svg>
+    <div style={{ width: "100%", maxWidth: 1000 }}>
+      <div style={{
+        fontSize: 28, fontWeight: 800, color: C.leafDeep,
+        fontFamily: "'Playfair Display',serif", marginBottom: 20, textAlign: "center",
+      }}>Soil Health Trends</div>
+
+      {trends.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: "#0a4a1e66" }}>
+          <div style={{ fontSize: 60, marginBottom: 16 }}>📉</div>
+          <div>No history found. Scan more cards to see trends!</div>
+        </div>
+      ) : (
+        <>
+          {/* Trend Chart */}
+          <div style={{
+            background: C.whiteOverlay, backdropFilter: "blur(12px)",
+            borderRadius: 20, padding: 24, border: `1px solid ${C.mintFresh}44`,
+            marginBottom: 32, height: 400
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.leafDeep, marginBottom: 16 }}>
+              📈 Nutrient History (N-P-K)
+            </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trends} margin={{ top: 20, right: 30, left: 0, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+                <XAxis dataKey="date" stroke={C.leafDeep} fontSize={12} tickLine={false} axisLine={false} dy={10} />
+                <YAxis stroke={C.leafDeep} fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+                />
+                <Legend wrapperStyle={{ paddingTop: "20px" }} />
+                <Line type="monotone" dataKey="N" stroke={C.mintFresh} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} name="Nitrogen" />
+                <Line type="monotone" dataKey="P" stroke={C.goldSun} strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="K" stroke="#2c7be5" strokeWidth={3} dot={{ r: 4 }} name="Potassium" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* History List */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {trends.slice().reverse().map((scan, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: C.whiteOverlay, padding: "16px 24px", borderRadius: 16,
+                border: `1px solid ${C.mintFresh}22`
+              }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.leafDeep }}>Analysis Report</div>
+                  <div style={{ fontSize: 12, color: "#0a4a1e88" }}>{scan.fullDate}</div>
+                </div>
+                <div style={{ display: "flex", gap: 16, textAlign: "right" }}>
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, color: "#0a4a1e66" }}>N</div>
+                    <div style={{ fontWeight: 700, color: C.mintFresh }}>{scan.N}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, color: "#0a4a1e66" }}>P</div>
+                    <div style={{ fontWeight: 700, color: C.goldSun }}>{scan.P}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, color: "#0a4a1e66" }}>K</div>
+                    <div style={{ fontWeight: 700, color: "#2c7be5" }}>{scan.K}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, color: "#0a4a1e66" }}>pH</div>
+                    <div style={{ fontWeight: 700, color: C.leafDeep }}>{scan.ph}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
-/* ─────────────────────────────────────────
-   GLOBAL KEYFRAME STYLES
-───────────────────────────────────────── */
-const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  @keyframes floatSoil {
-    0%   { transform: translateY(110vh) translateX(0) rotateZ(0deg) scale(0); opacity:0; }
-    5%   { opacity: 1; }
-    90%  { opacity: 0.8; }
-    100% { transform: translateY(-10vh) translateX(var(--drift)) rotateZ(720deg) scale(1); opacity:0; }
-  }
-  @keyframes scanPulse {
-    0%,100% { opacity:.4; }
-    50%     { opacity:1; }
-  }
-  @keyframes scanBeam {
-    0%   { top:-10px; opacity:0; }
-    5%   { opacity:1; }
-    95%  { opacity:1; }
-    100% { top:100vh; opacity:0; }
-  }
-  @keyframes cardFloat {
-    0%,100% { transform: translateY(0)    rotateX(5deg)  rotateY(-5deg); }
-    33%     { transform: translateY(-18px) rotateX(-3deg) rotateY(8deg); }
-    66%     { transform: translateY(10px)  rotateX(8deg)  rotateY(-8deg); }
-  }
-  @keyframes barFill {
-    from { width:40%; }
-    to   { width:80%; }
-  }
-  @keyframes ringRotate {
-    from { transform: translate(-50%,-50%) rotateZ(0deg)   rotateX(70deg); }
-    to   { transform: translate(-50%,-50%) rotateZ(360deg) rotateX(70deg); }
-  }
-  @keyframes moleculeFloat {
-    0%,100% { transform: translateY(0)    rotate(0deg);   opacity:.5; }
-    50%     { transform: translateY(-40px) rotate(180deg); opacity:1; }
-  }
-  @keyframes titleGlow {
-    0%,100% { filter: drop-shadow(0 0 30px rgba(232,184,75,0.3)); }
-    50%     { filter: drop-shadow(0 0 60px rgba(0,245,196,0.5)); }
-  }
-  @keyframes logoSpin {
-    0%,100% { transform: rotateY(0deg); }
-    50%     { transform: rotateY(360deg); }
-  }
-  @keyframes badgePulse {
-    0%,100% { border-color:rgba(201,125,46,0.3); color:rgba(255,255,255,0.6); }
-    50%     { border-color:rgba(0,245,196,0.5);   color:rgba(0,245,196,0.9); }
-  }
-  @keyframes btnShimmer {
-    0%,70%,100% { transform:translateX(-100%); }
-    40%          { transform:translateX(100%); }
-  }
-  @keyframes btnBreath {
-    0%,100% { box-shadow: 0 4px 30px rgba(201,125,46,0.4); }
-    50%     { box-shadow: 0 4px 60px rgba(201,125,46,0.7), 0 0 0 8px rgba(201,125,46,0.1); }
-  }
-  @keyframes dotBlink {
-    0%,100% { opacity:1; transform:scale(1); }
-    50%     { opacity:.3; transform:scale(.5); }
-  }
-  @keyframes wheatWave {
-    from { transform-origin:bottom center; transform:rotate(-5deg); }
-    to   { transform-origin:bottom center; transform:rotate(5deg); }
-  }
-  @keyframes fadeInUp {
-    from { opacity:0; transform:translateY(12px); }
-    to   { opacity:1; transform:translateY(0); }
-  }
-`;
-
-/* ─────────────────────────────────────────
-   ROOT COMPONENT
-───────────────────────────────────────── */
-export default function MittiScan() {
-  const navigate = useNavigate(); 
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handle = e => {
-      setMousePos({
-        x: e.clientX / window.innerWidth  - 0.5,
-        y: e.clientY / window.innerHeight - 0.5,
-      });
-    };
-    window.addEventListener("mousemove", handle);
-    return () => window.removeEventListener("mousemove", handle);
-  }, []);
+/* ── Cart Tab ── */
+function CartTab({ cart, setCart, result }) {
+  const total = cart.reduce((sum, item) => sum + (item.qty || item.bags) * (item.price || item.cost), 0);
 
   return (
-    <>
-      {/* ── Inject keyframes ── */}
-      <style>{GLOBAL_CSS}</style>
-
+    <div style={{ width: "100%", maxWidth: 700 }}>
       <div style={{
-        width: "100vw", height: "100vh", overflow: "hidden",
-        background: "#0d0500", fontFamily: "'Rajdhani', sans-serif",
-        position: "relative",
-      }}>
+        fontSize: 28, fontWeight: 800, color: C.leafDeep,
+        fontFamily: "'Playfair Display',serif", marginBottom: 20, textAlign: "center",
+      }}>Your Cart</div>
 
-        {/* Layer 0 — Canvas terrain */}
-        <TerrainCanvas />
-
-        {/* Layer 1 — Soil particles */}
-        <ParticleLayer />
-
-        {/* Layer 2 — Holo rings + molecules */}
-        <HoloRings mousePos={mousePos} />
-        <Molecules />
-
-        {/* Layer 3 — Scan overlay */}
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 3, pointerEvents: "none",
-          background: "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,245,196,0.015) 3px,rgba(0,245,196,0.015) 4px)",
-          animationName: "scanPulse", animationDuration: "4s",
-          animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-        }} />
-
-        {/* Layer 3 — Wheat */}
-        <WheatLayer />
-
-        {/* Layer 4 — Scan beam */}
-        <div style={{
-          position: "fixed", left: 0, right: 0, height: 3,
-          background: "linear-gradient(90deg,transparent,#00f5c4,transparent)",
-          boxShadow: "0 0 20px 4px rgba(0,245,196,0.3)",
-          zIndex: 4,
-          animationName: "scanBeam", animationDuration: "6s",
-          animationTimingFunction: "linear", animationIterationCount: "infinite",
-        }} />
-
-        {/* Layer 5 — Floating data cards */}
-        {CARDS.map((card, i) => (
-          <SoilCard key={i} card={card} mousePos={mousePos} />
-        ))}
-
-        {/* Layer 6 — Corner HUD brackets */}
-        {[
-          { top: 20, left: 20, borderTop: "2px solid #c97d2e", borderLeft: "2px solid #c97d2e" },
-          { top: 20, right: 20, borderTop: "2px solid #c97d2e", borderRight: "2px solid #c97d2e" },
-          { bottom: 20, left: 20, borderBottom: "2px solid #c97d2e", borderLeft: "2px solid #c97d2e" },
-          { bottom: 20, right: 20, borderBottom: "2px solid #c97d2e", borderRight: "2px solid #c97d2e" },
-        ].map((s, i) => (
-          <div key={i} style={{ position: "fixed", width: 60, height: 60, zIndex: 6, ...s }} />
-        ))}
-
-        {/* Layer 10 — Main UI overlay */}
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 10,
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          textAlign: "center", pointerEvents: "none",
-        }}>
-          {/* Logo */}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
-            <LogoIcon />
-          </div>
-
-          {/* Brand name */}
-          <div style={{
-            fontFamily: "'Playfair Display', serif",
-            fontSize: "clamp(48px,8vw,96px)",
-            fontWeight: 900,
-            letterSpacing: -2,
-            lineHeight: 1,
-            background: "linear-gradient(135deg,#e8b84b 0%,#ffffff 40%,#76c442 70%,#00f5c4 100%)",
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            animationName: "titleGlow",
-            animationDuration: "4s",
-            animationTimingFunction: "ease-in-out",
-            animationIterationCount: "infinite",
-            filter: "drop-shadow(0 0 30px rgba(232,184,75,0.3))",
-          }}>
-            Mitti-Scan
-          </div>
-
-          <div style={{
-            fontSize: "clamp(12px,1.5vw,16px)",
-            letterSpacing: 6, textTransform: "uppercase",
-            color: "rgba(255,255,255,0.45)", marginTop: 12,
-            fontWeight: 300,
-            animationName: "fadeInUp", animationDuration: "2s",
-            animationFillMode: "forwards",
-          }}>
-            Soil Health Card Digitizer + Actionizer
-          </div>
-
-          <div style={{
-            fontSize: "clamp(11px,1.2vw,14px)",
-            letterSpacing: 3, textTransform: "uppercase",
-            color: "#00f5c4", marginTop: 6, opacity: 0.7, fontWeight: 600,
-          }}>
-            OCR · Agricultural Chemistry · Smart Recommendations · Marketplace
-          </div>
-
-          {/* Tech badges */}
-          <div style={{ display: "flex", gap: 12, marginTop: 36, flexWrap: "wrap", justifyContent: "center" }}>
-            {["AI-Powered OCR","Soil Analysis","Crop Advisory","Market Connect"].map((b, i) => (
-              <div key={b} style={{
-                padding: "6px 14px",
-                border: "1px solid rgba(201,125,46,0.3)",
-                borderRadius: 100, fontSize: 10, letterSpacing: 2,
-                textTransform: "uppercase", color: "rgba(255,255,255,0.6)",
-                background: "rgba(255,255,255,0.03)",
-                backdropFilter: "blur(10px)",
-                animationName: "badgePulse",
-                animationDuration: "3s",
-                animationDelay: `${-i}s`,
-                animationTimingFunction: "ease-in-out",
-                animationIterationCount: "infinite",
+      {cart.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: "#0a4a1e66" }}>
+          <div style={{ fontSize: 60, marginBottom: 16 }}>🛒</div>
+          <div style={{ fontSize: 16 }}>Your cart is empty</div>
+          {result && <p>Check Dashboard for recommendations to add!</p>}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+            {cart.map((item, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 16,
+                background: C.whiteOverlay,
+                borderRadius: 16, padding: "16px 20px",
+                border: `1px solid ${C.mintFresh}44`,
+                boxShadow: "0 2px 16px rgba(0,0,0,0.04)",
               }}>
-                {b}
+                <div style={{ fontSize: 32 }}>{item.img || "🌾"}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.leafDeep }}>{item.product || item.name}</div>
+                  <div style={{ fontSize: 12, color: "#0a4a1e66" }}>{item.unit || "Bag"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>{item.bags || item.qty} x</span>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.leafDeep, minWidth: 80, textAlign: "right" }}>
+                  ₹{(item.bags || item.qty) * (item.cost || item.price)}
+                </div>
+                <button
+                  onClick={() => setCart(cart.filter((_, idx) => idx !== i))}
+                  style={{ marginLeft: 10, border: "none", background: "transparent", cursor: "pointer", color: "#ff6b6b", fontSize: 18 }}
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
 
-          {/* CTA button */}
-          <button
-           onClick={() => navigate("/scan")} 
-            style={{
-              marginTop: 40,
-              padding: "14px 48px",
-              background: "linear-gradient(135deg,#c97d2e,#e8b84b)",
-              border: "none", borderRadius: 100,
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 14, fontWeight: 700, letterSpacing: 4,
-              textTransform: "uppercase", color: "#1a0d00",
-              cursor: "pointer", pointerEvents: "all",
-              position: "relative", overflow: "hidden",
-              boxShadow: "0 4px 30px rgba(201,125,46,0.4)",
-              animationName: "btnBreath", animationDuration: "3s",
-              animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-              transition: "transform .2s, box-shadow .2s",
+          <div style={{
+            background: `${C.mintFresh}18`,
+            borderRadius: 16, padding: 20,
+            border: `2px solid ${C.mintFresh}66`,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 16, fontWeight: 600, color: C.leafDeep }}>Subtotal:</span>
+              <span style={{ fontSize: 24, fontWeight: 800, color: C.leafDeep }}>₹{total.toLocaleString()}</span>
+            </div>
+            <button style={{
+              width: "100%", padding: "14px", borderRadius: 100,
+              background: "linear-gradient(135deg,#1a7a30,#2dd870)",
+              border: "none", color: "#fff", fontSize: 15, fontWeight: 700,
+              cursor: "pointer", letterSpacing: 2, textTransform: "uppercase",
+              boxShadow: "0 6px 28px rgba(45,216,112,0.4)",
+              transition: "transform 0.2s",
             }}
-            onMouseEnter={e => {
-              e.currentTarget.style.transform = "translateY(-3px)";
-              e.currentTarget.style.boxShadow = "0 12px 50px rgba(201,125,46,0.6)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 4px 30px rgba(201,125,46,0.4)";
-            }}
-          >
-            {/* Shimmer */}
-            <span style={{
-              position: "absolute", inset: 0,
-              background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)",
-              animationName: "btnShimmer", animationDuration: "3s",
-              animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-            }} />
-            Scan Your Soil Card
-          </button>
-        </div>
+              onMouseEnter={e => e.target.style.transform = "translateY(-3px)"}
+              onMouseLeave={e => e.target.style.transform = "translateY(0)"}
+              onClick={() => alert("Proceeding to checkout!")}
+            >
+              Checkout
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
-        {/* Layer 8 — Bottom status bar */}
+/* ── Main App ── */
+export default function MittiScanApp() {
+  const [view, setView] = useState("landing"); // "landing" | "app"
+  const [activeTab, setActiveTab] = useState("upload");
+
+  // State from VerifyEdit
+  const [soil, setSoil] = useState({ N: "", P: "", K: "", OC: "", pH: "" });
+  const [crop, setCrop] = useState("wheat");
+  const [farmSize, setFarmSize] = useState(1);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [cart, setCart] = useState([]);
+  const [file, setFile] = useState(null);
+  const [isVerified, setIsVerified] = useState(false);
+
+  // Handlers
+  async function handleScan(selectedFile) {
+    if (!selectedFile) return;
+    try {
+      setLoading(true);
+      setError("");
+      const data = await scanCard(selectedFile);
+      setSoil(data.soilData);
+      setIsVerified(true);
+    } catch (err) {
+      setError("OCR failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAnalyze() {
+    if (Object.values(soil).some(val => val === "")) {
+      setError("All fields are required");
+      return;
+    }
+
+    try {
+      // UNIT CONVERSION: Acres -> Hectares
+      const sizeInHectares = farmSize * 0.4047;
+      const response = await analyzeSoil({ soil, crop, farmSize: sizeInHectares });
+      setResult(response);
+
+      // Populate cart with recommendations
+      const newCart = response.recommendations.map(r => ({
+        product: r.product,
+        bags: r.bags,
+        cost: r.cost,
+        unit: "Bag",
+        img: "🌾",
+        buyLinks: r.buyLinks
+      }));
+      setCart(newCart);
+
+      setIsVerified(false);
+      setActiveTab("dashboard");
+    } catch (err) {
+      setError("Analysis failed. Please check inputs.");
+    }
+  }
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "upload": return <UploadTab
+        soil={soil} setSoil={setSoil}
+        crop={crop} setCrop={setCrop}
+        farmSize={farmSize} setFarmSize={setFarmSize}
+        onScan={handleScan} onAnalyze={handleAnalyze}
+        loading={loading} error={error}
+        isVerified={isVerified} setIsVerified={setIsVerified}
+        file={file} setFile={setFile}
+        setError={setError}
+      />;
+      // Pass crop to dashboard for chart standards
+      case "dashboard": return <DashboardTab result={result} soil={soil} metrics={result ? true : false} activeTab={activeTab} crop={crop} />;
+      case "history": return <HistoryTab />;
+      case "cart": return <CartTab cart={cart} setCart={setCart} result={result} />;
+      default: return null;
+    }
+  };
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;600;700;800&display=swap');
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:'DM Sans',sans-serif; }
+
+        @keyframes titleShimmer { 0%,100%{filter:drop-shadow(0 0 20px rgba(95,255,138,0.4));} 50%{filter:drop-shadow(0 0 50px rgba(184,255,90,0.6));} }
+        @keyframes fadeUp { from{opacity:0; transform:translateY(16px);} to{opacity:1; transform:translateY(0);} }
+        @keyframes logoBounce { 0%,100%{transform:translateY(0) scale(1);} 50%{transform:translateY(-8px) scale(1.04);} }
+        @keyframes btnPulse { 0%,100%{box-shadow:0 4px 24px rgba(45,216,112,0.35), 0 0 0 0 rgba(45,216,112,0.2);} 50%{box-shadow:0 8px 40px rgba(45,216,112,0.6), 0 0 0 10px rgba(45,216,112,0);} }
+        @keyframes shimmerSlide { 0%,65%,100%{transform:translateX(-100%);} 35%{transform:translateX(100%);} }
+        @keyframes tabSlide { from{opacity:0; transform:translateY(-10px);} to{opacity:1; transform:translateY(0);} }
+        @keyframes contentFadeIn { from{opacity:0; transform:scale(0.96);} to{opacity:1; transform:scale(1);} }
+
+        /* Organic Animations */
+        @keyframes sway { 0%{transform:rotate(0deg);} 100%{transform:rotate(2deg);} }
+        @keyframes drift { 0%{transform:translate(0,0);} 50%{transform:translate(10px,-10px);} 100%{transform:translate(0,0);} }
+        @keyframes pulse-soft { 0%,100%{opacity:0.6;} 50%{opacity:1;} }
+        @keyframes leafFloat { 0%{ transform: translate(0,0) rotate(0deg); opacity:0; } 20%{ opacity:1; } 100%{ transform: translate(var(--drift), 100vh) rotate(360deg); opacity:0; } }
+        @keyframes orbPulse { 0%,100%{ transform: translate(-50%,-50%) scale(1); opacity:0.3; } 50%{ transform: translate(-50%,-50%) scale(1.1); opacity:0.6; } }
+        @keyframes grassSway { 0%{ transform: rotate(-2deg); } 100%{ transform: rotate(2deg); } }
+        
+        .grass-layer {
+          position: absolute; bottom: -20px; left: 0; right: 0; height: 120px;
+          background: url('data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"%3E%3Cpath fill="%232dd870" fill-opacity="0.2" d="M0,224L48,213.3C96,203,192,181,288,181.3C384,181,480,203,576,224C672,245,768,267,864,261.3C960,256,1056,224,1152,197.3C1248,171,1344,149,1392,138.7L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"%3E%3C/path%3E%3C/svg%3E');
+          background-size: cover;
+          animation: sway 6s ease-in-out infinite alternate;
+          pointer-events: none;
+        }
+
+        .floating-orb {
+          position: absolute; border-radius: 50%;
+          background: radial-gradient(circle, rgba(95,255,138,0.2) 0%, rgba(255,255,255,0) 70%);
+          animation: drift 10s ease-in-out infinite;
+        }
+
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+          .dashboard-grid { grid-template-columns: 100% !important; }
+          .top-box { flex-direction: column !important; gap: 24px !important; }
+          .desktop-divider { display: none !important; }
+          .metric-group { justify-content: space-around !important; width: 100% !important; }
+          .gauge-flex { gap: 12px !important; }
+        }
+      `}</style>
+
+      {/* GLOBAL LOADING OVERLAY */}
+      {loading && <LoadingOverlay message={isVerified ? "Analyzing Soil..." : "Scanning Card..."} />}
+
+      {view === "landing" ? (
+        <>
+          {/* ── Landing Screen with Canvas ── */}
+          <FieldCanvas />
+          <GlowOrbs />
+          <LeafParticles />
+          <GrassLayer />
+
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 10,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            textAlign: "center", padding: 20,
+            animation: "contentFadeIn 0.8s ease-out",
+          }}>
+
+            <svg viewBox="0 0 72 72" fill="none"
+              style={{
+                width: 110, height: 110, marginBottom: 24,
+                animation: "logoBounce 6s ease-in-out infinite"
+              }}>
+              <circle cx="36" cy="36" r="33" stroke="#2dd870" strokeWidth="1.5" strokeDasharray="5 4" opacity="0.6" />
+              <rect x="14" y="42" width="44" height="20" rx="4" fill="#5c3a1e" /> {/* Soil */}
+              <path d="M30 42 L30 20 Q36 10 42 20 L42 42" stroke="#2dd870" strokeWidth="3" fill="none" strokeLinecap="round" /> {/* Sprout */}
+              <circle cx="30" cy="18" r="3" fill="#5fff8a" />
+              <circle cx="42" cy="14" r="2.5" fill="#b8ff5a" />
+            </svg>
+
+            <h1 style={{
+              fontSize: "clamp(3.5rem, 8vw, 6rem)", fontWeight: 900,
+              fontFamily: "'Playfair Display',serif", color: C.leafDeep,
+              letterSpacing: -2, lineHeight: 1.1, marginBottom: 16,
+              textShadow: "0 10px 30px rgba(45,216,112,0.3)"
+            }}>
+              Mitti<span style={{ color: C.mintFresh }}>Scan</span> AI
+            </h1>
+
+            <p style={{
+              fontSize: "clamp(1.1rem, 2vw, 1.4rem)", color: C.forestMid, maxWidth: 600,
+              lineHeight: 1.6, marginBottom: 48, opacity: 0.9, fontWeight: 500,
+              textShadow: "0 2px 10px rgba(255,255,255,0.8)"
+            }}>
+              Deep insights from just a photo. <br />
+              <span style={{ opacity: 0.7, fontSize: "0.9em" }}>Upload your Soil Health Card & get AI-powered fertilizer recommendations instantly.</span>
+            </p>
+
+            <button
+              onClick={() => setView("app")}
+              style={{
+                position: "relative", overflow: "hidden",
+                padding: "20px 56px", borderRadius: 100,
+                background: "linear-gradient(135deg, #1a7a30 0%, #2dd870 100%)",
+                border: "none", color: "#fff", fontSize: 18, fontWeight: 700,
+                letterSpacing: 2, textTransform: "uppercase", cursor: "pointer",
+                boxShadow: "0 10px 40px rgba(45,216,112,0.4)",
+                transition: "all 0.3s ease",
+                animation: "btnPulse 3s infinite"
+              }}
+              onMouseEnter={e => { e.target.style.transform = "scale(1.05)"; e.target.style.boxShadow = "0 15px 50px rgba(45,216,112,0.6)"; }}
+              onMouseLeave={e => { e.target.style.transform = "scale(1)"; e.target.style.boxShadow = "0 10px 40px rgba(45,216,112,0.4)"; }}
+            >
+              <span style={{ position: "relative", zIndex: 2 }}>🌱 Scan Your Soil Card</span>
+              <div style={{
+                position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)",
+                animation: "shimmerSlide 3s infinite linear"
+              }} />
+            </button>
+          </div>
+        </>
+      ) : (
+        /* ── App Screen ── */
         <div style={{
-          position: "fixed", bottom: 28, left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 8, display: "flex", alignItems: "center", gap: 24,
-          fontSize: 10, letterSpacing: 3, textTransform: "uppercase",
-          color: "rgba(255,255,255,0.3)",
+          position: "fixed", inset: 0, zIndex: 10,
+          background: "linear-gradient(135deg, #e3ffe7 0%, #d9e7ff 100%)",
+          display: "flex", flexDirection: "column",
+          padding: "clamp(20px,3vw,40px)",
+          overflow: "auto",
         }}>
-          <span>System Active</span>
+          {/* Header */}
           <div style={{
-            width: 6, height: 6, borderRadius: "50%", background: "#00f5c4",
-            animationName: "dotBlink", animationDuration: "2s",
-            animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-          }} />
-          <span>Sensor Ready</span>
-          <div style={{
-            width: 6, height: 6, borderRadius: "50%", background: "#76c442",
-            animationName: "dotBlink", animationDuration: "2s", animationDelay: "-1s",
-            animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-          }} />
-          <span>AI Loaded</span>
-        </div>
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 24, flexWrap: "wrap", gap: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.leafDeep, fontFamily: "'Playfair Display',serif", lineHeight: 1 }}>
+                Mitti-Scan
+              </div>
+            </div>
 
-      </div>
+            <button
+              onClick={() => setView("landing")}
+              style={{
+                padding: "8px 20px", borderRadius: 100,
+                background: C.whiteOverlay,
+                border: "1px solid rgba(45,216,112,0.3)",
+                color: C.leafDeep, fontSize: 12, fontWeight: 700,
+                cursor: "pointer", transition: "all 0.2s",
+              }}
+            >← Back</button>
+          </div>
+
+          {/* Organic Tab Navigation */}
+          <div style={{
+            display: "flex", gap: 6, marginBottom: 32,
+            background: C.whiteOverlay,
+            padding: 6, borderRadius: 100,
+            border: "1px solid rgba(45,216,112,0.25)",
+            alignSelf: "center",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.04)",
+          }}>
+            {TABS.map((tab, i) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  padding: "10px 28px", borderRadius: 100,
+                  background: activeTab === tab.id
+                    ? "linear-gradient(135deg,#1a7a30,#2dd870)"
+                    : "transparent",
+                  border: "none",
+                  color: activeTab === tab.id ? "#fff" : C.leafDeep,
+                  fontSize: 13, fontWeight: 700, letterSpacing: 1,
+                  cursor: "pointer", transition: "all 0.3s",
+                  textTransform: "uppercase",
+                  display: "flex", alignItems: "center", gap: 8,
+                }}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Content Area */}
+          <div style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "center",
+            paddingBottom: 40,
+            animationName: "contentFadeIn",
+            animationDuration: "0.4s",
+          }}>
+            {renderTabContent()}
+          </div>
+        </div >
+      )
+      }
+
     </>
   );
 }
