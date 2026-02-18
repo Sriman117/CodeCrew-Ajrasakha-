@@ -1,10 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const interpretSoil = require("../logic/interpretSoil");
-const calculateDeficiency = require("../logic/calculateDeficiency");
-const recommendFertilizer = require("../logic/recommendFertilizer");
-const SoilScan = require("../models/SoilScan");
+
 
 /**
  * POST /api/analyze
@@ -15,62 +12,8 @@ const SoilScan = require("../models/SoilScan");
  *   farmSize: number
  * }
  */
-router.post("/analyze", async (req, res) => {
-  try {
-    const { soil, crop, farmSize } = req.body;
+const analysisController = require("../controllers/analysisController");
 
-    if (!soil || !crop || !farmSize) {
-      return res.status(400).json({
-        error: "Missing required fields"
-      });
-    }
-
-    if (soil.pH < 3 || soil.pH > 9) {
-      return res.status(400).json({
-        error: "Soil pH must be between 3 and 9"
-      });
-    }
-
-    /* ---------- LOGIC ENGINE ---------- */
-    const interpretation = interpretSoil(soil);
-    const deficiencies = calculateDeficiency(soil, crop);
-    const recommendations = recommendFertilizer(deficiencies, farmSize);
-
-    const totalCost = recommendations.reduce(
-  (sum, item) => sum + (item.cost || 0),
-  0
-);
-
-
-    /* ---------- SAVE TO MONGODB ---------- */
-    await SoilScan.create({
-      soil,
-      crop,
-      farmSize,
-      interpretation,
-      deficiencies,
-      recommendations,
-      totalCost
-    });
-
-    /* ---------- RESPONSE ---------- */
-    res.json({
-      interpretation,
-      deficiencies: deficiencies.map(d => ({
-        nutrient: d.nutrient,
-        status: d.status,
-        deficiency_percentage: d.deficiency_percentage
-      })),
-      recommendations,
-      totalCost
-    });
-
-  } catch (error) {
-    console.error("Analysis error:", error);
-    res.status(500).json({
-      error: "Analysis failed"
-    });
-  }
-});
+router.post("/analyze", analysisController.analyzeSoil);
 
 module.exports = router;

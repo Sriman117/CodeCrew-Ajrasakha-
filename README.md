@@ -30,9 +30,9 @@
 
 ### Prerequisites
 *   Node.js (v18+)
-*   MongoDB (Local or Atlas URI)
+*   MongoDB (Local or Atlas URI) - Ensure it's running!
 
-### Installation
+### Quick Start (Windows)
 
 1.  **Clone the repository**
     ```bash
@@ -40,22 +40,27 @@
     cd MittiScan
     ```
 
-2.  **Backend Setup**
+2.  **First Time Setup**
+    Double-click `install.bat` (or run it in terminal).  
+    *This installs all dependencies for both backend and frontend.*
+
+3.  **Run the App**
+    Double-click `start.bat` (or run it in terminal).  
+    *This launches both the backend API and frontend React app concurrently.*
+    *   Frontend: `http://localhost:3000`
+    *   Backend: `http://localhost:5000`
+
+### Manual Setup (Linux/Mac)
+
+1.  **Backend**
     ```bash
-    cd backend
-    npm install
-    # Create a .env file
-    echo "MONGO_URI=mongodb://localhost:27017/mittiscan" > .env
-    npm start
+    cd backend && npm install && npm start
     ```
 
-3.  **Frontend Setup**
+2.  **Frontend**
     ```bash
-    cd frontend
-    npm install
-    npm start
+    cd frontend && npm install && npm start
     ```
-    The app will launch at `http://localhost:3000`.
 
 ## API Endpoints
 
