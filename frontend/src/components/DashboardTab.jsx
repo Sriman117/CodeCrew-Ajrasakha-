@@ -96,6 +96,36 @@ export function DashboardTab({ result, soil, metrics, activeTab, crop }) {
         { name: "Potassium", value: soil.K, ideal: standards.targetK },
     ];
 
+    // Calculate Soil Health Status
+    const deficiencyCount = result.deficiencies.length;
+
+    // Numerical Soil Health Score Calculation (0-100)
+    // Formula: Score = Avg(max(0, 100 - (abs(actual - target) / target * 100))) for N, P, K
+    const calculateNutrientScore = (actual, target) => {
+        if (!target || target === 0) return 100;
+        const diff = Math.abs(actual - target);
+        return Math.max(0, 100 - (diff / target * 100));
+    };
+
+    const scoreN = calculateNutrientScore(soil.N, standards.targetN);
+    const scoreP = calculateNutrientScore(soil.P, standards.targetP);
+    const scoreK = calculateNutrientScore(soil.K, standards.targetK);
+    const overallScore = Math.round((scoreN + scoreP + scoreK) / 3);
+
+    let healthStatus = "Optimal";
+    let healthColor = C.mintFresh;
+    let healthIcon = "✅";
+
+    if (overallScore < 40 || deficiencyCount >= 3) {
+        healthStatus = "Poor";
+        healthColor = "#ff6b6b";
+        healthIcon = "⚠️";
+    } else if (overallScore < 75 || deficiencyCount > 0) {
+        healthStatus = "Moderate";
+        healthColor = "#f5d060";
+        healthIcon = "ℹ️";
+    }
+
     return (
         <div style={{ width: "100%", maxWidth: 1200 }}>
 
@@ -149,6 +179,45 @@ export function DashboardTab({ result, soil, metrics, activeTab, crop }) {
                 </div>
             </div>
 
+            {/* Soil Health Summary Section */}
+            <div style={{
+                background: `${healthColor}11`,
+                padding: "16px 24px",
+                borderRadius: 20,
+                border: `1px solid ${healthColor}44`,
+                marginBottom: 24,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                flexDirection: isMobile ? "column" : "row",
+                textAlign: isMobile ? "center" : "left"
+            }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, flexDirection: isMobile ? "column" : "row" }}>
+                    <div style={{
+                        width: 70, height: 70, borderRadius: "50%",
+                        border: `4px solid ${healthColor}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+                    }}>
+                        <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: healthColor, lineHeight: 1 }}>{overallScore}</div>
+                            <div style={{ fontSize: 8, fontWeight: 700, color: "#aaa", textTransform: "uppercase" }}>Score</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: C.forestMid, textTransform: "uppercase", letterSpacing: 0.5 }}>Overall Soil Quality</div>
+                        <div style={{ fontSize: 24, fontWeight: 900, color: healthColor, textTransform: "uppercase" }}>{healthStatus}</div>
+                    </div>
+                </div>
+                <div style={{ fontSize: 14, color: C.leafDeep, opacity: 0.8, maxWidth: isMobile ? "100%" : "60%", lineHeight: 1.4, fontWeight: 500 }}>
+                    {deficiencyCount === 0
+                        ? "Excellent! Your soil meets all nutrient standards for this crop. No major corrections needed."
+                        : `We detected ${deficiencyCount} nutrient ${deficiencyCount === 1 ? 'deficiency' : 'deficiencies'}. Improving these will significantly boost your crop yield.`
+                    }
+                </div>
+            </div>
+
 
             {/* 2. MIDDLE SECTION: Two Cols (Gauges + Bar Chart) */}
             <div className="dashboard-grid" style={{
@@ -162,8 +231,33 @@ export function DashboardTab({ result, soil, metrics, activeTab, crop }) {
                     background: C.whiteOverlay, padding: 24, borderRadius: 20,
                     border: `1px solid ${C.mintFresh}44`, display: "flex", flexDirection: "column"
                 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: C.leafDeep, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.leafDeep, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                         <span>🚀</span> Nutrient Health Gauges
+                    </div>
+
+                    {/* Gauge Legend */}
+                    <div style={{
+                        display: "flex",
+                        gap: 12,
+                        marginBottom: 20,
+                        flexWrap: "wrap",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        color: "#0a4a1e88"
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 12, height: 12, borderRadius: 3, background: C.mintFresh }}></div> Optimal
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 12, height: 12, borderRadius: 3, background: "#f5d060" }}></div> Moderate
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 12, height: 12, borderRadius: 3, background: "#ff6b6b" }}></div> Deficient
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 12, height: 12, borderRadius: 3, background: "#706f6fff" }}></div> Target
+                        </div>
                     </div>
                     <div className="gauge-flex" style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 20, flex: 1, alignItems: "center" }}>
                         <RadialGauge label="Nitrogen" value={soil.N || 0} min={0} max={600} ideal={standards.targetN} />
